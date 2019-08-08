@@ -37,7 +37,7 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
  aaa://targetA/actionB?id=1234
  */
 
-- (id)performActionWithUrl:(NSURL *)url completion:(void (^)(NSDictionary *))completion
+- (id)performActionWithUrl:(NSURL *)url complexParams:(nullable NSDictionary*)complexParams completion:(void (^)(NSDictionary *))completion
 {
     NSMutableDictionary *params = [[NSMutableDictionary alloc] init];
     NSString *urlString = [url query];
@@ -46,10 +46,13 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
         if([elts count] < 2) continue;
         [params setObject:[elts lastObject] forKey:[elts firstObject]];
     }
+    if([complexParams isKindOfClass:[NSDictionary class]] && complexParams.count){
+        [params setValuesForKeysWithDictionary:complexParams];
+    }
     
     // 这里这么写主要是出于安全考虑，防止黑客通过远程方式调用本地模块。这里的做法足以应对绝大多数场景，如果要求更加严苛，也可以做更加复杂的安全逻辑。
     NSString *actionName = [url.path stringByReplacingOccurrencesOfString:@"/" withString:@""];
-    if ([actionName hasPrefix:@"native"]) {
+    if ([actionName hasPrefix:@"native"]) {//如果有些业务类禁止远程调用，采用action前加native约束
         return @(NO);
     }
     
@@ -63,8 +66,12 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
         }
     }
     return result;
-}
 
+}
+- (id)performActionWithUrl:(NSURL *)url completion:(void (^)(NSDictionary *))completion
+{
+    return [self performActionWithUrl:url complexParams:nil completion:completion];
+}
 - (id)performTarget:(NSString *)targetName action:(NSString *)actionName params:(NSDictionary *)params shouldCacheTarget:(BOOL)shouldCacheTarget
 {
     NSString *swiftModuleName = params[kCTMediatorParamsKeySwiftTargetModuleName];
@@ -83,7 +90,7 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
     }
 
     // generate action
-    NSString *actionString = [NSString stringWithFormat:@"Action_%@:", actionName];
+    NSString *actionString = [NSString stringWithFormat:@"Action_%@", actionName];
     SEL action = NSSelectorFromString(actionString);
     
     if (target == nil) {
@@ -140,29 +147,52 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
     }
     const char* retType = [methodSig methodReturnType];
 
+    NSInteger paramIndex = 1;
+    if([NSStringFromSelector(action) hasSuffix:@":"]){
+        paramIndex = 2;
+    }
     if (strcmp(retType, @encode(void)) == 0) {
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
-        [invocation setArgument:&params atIndex:2];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
         [invocation setSelector:action];
         [invocation setTarget:target];
         [invocation invoke];
         return nil;
     }
 
-    if (strcmp(retType, @encode(NSInteger)) == 0) {
+    if (strcmp(retType, @encode(long)) == 0) {
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
-        [invocation setArgument:&params atIndex:2];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
         [invocation setSelector:action];
         [invocation setTarget:target];
         [invocation invoke];
-        NSInteger result = 0;
+        long result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(int)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        int result = 0;
         [invocation getReturnValue:&result];
         return @(result);
     }
 
     if (strcmp(retType, @encode(BOOL)) == 0) {
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
-        [invocation setArgument:&params atIndex:2];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
         [invocation setSelector:action];
         [invocation setTarget:target];
         [invocation invoke];
@@ -171,24 +201,132 @@ NSString * const kCTMediatorParamsKeySwiftTargetModuleName = @"kCTMediatorParams
         return @(result);
     }
 
-    if (strcmp(retType, @encode(CGFloat)) == 0) {
+    if (strcmp(retType, @encode(double)) == 0) {
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
-        [invocation setArgument:&params atIndex:2];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
         [invocation setSelector:action];
         [invocation setTarget:target];
         [invocation invoke];
-        CGFloat result = 0;
+        double result = 0;
         [invocation getReturnValue:&result];
         return @(result);
     }
 
-    if (strcmp(retType, @encode(NSUInteger)) == 0) {
+    if (strcmp(retType, @encode(float)) == 0) {
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
-        [invocation setArgument:&params atIndex:2];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
         [invocation setSelector:action];
         [invocation setTarget:target];
         [invocation invoke];
-        NSUInteger result = 0;
+        float result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(unsigned long)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        unsigned long result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(unsigned int)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        unsigned int result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(char)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        char result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(unsigned char)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        unsigned char result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(short)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        short result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(unsigned short)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        unsigned short result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(long long)) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        long long result = 0;
+        [invocation getReturnValue:&result];
+        return @(result);
+    }
+
+    if (strcmp(retType, @encode(unsigned long long )) == 0) {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSig];
+        if(paramIndex == 2){
+            [invocation setArgument:&params atIndex:2];
+        }
+        [invocation setSelector:action];
+        [invocation setTarget:target];
+        [invocation invoke];
+        unsigned long long  result = 0;
         [invocation getReturnValue:&result];
         return @(result);
     }
